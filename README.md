@@ -1,85 +1,103 @@
-# pypi fund
+# pip‑fund
 
-A simple utility to enumerate funding links for Python packages, inspired by npm's npm fund.
+`pip‑fund` is a small command‑line tool that scans your Python
+environment (or a list of package names) and reports any funding or
+sponsorship links it can find.  It is inspired by Node.js’s
+`npm fund` command and uses Python’s packaging metadata to discover
+funding information.  The goal is to make it easy for developers to
+discover how to support the open‑source libraries they depend on.
 
-## Background
+## Features
 
-Node.js's package manager includes an `npm fund` command that lists dependencies with funding URLs. This encourages developers to support the open‑source libraries they depend on.
+* **Normalises labels and URLs:** Funding links are detected by
+  examining `Project‑URL` metadata and matching normalised labels
+  against a set of known aliases such as `funding`, `sponsor`,
+  `donate` and `donation`.  Labels containing the words `fund` or
+  `sponsor` are also matched.  Query strings and fragments are
+  stripped from URLs before grouping, so links that differ only by
+  tracking parameters are treated as the same.
+* **Groups duplicate links:** When multiple packages share the same
+  funding URL, the tool groups them into a single entry and lists
+  all associated package names.
+* **Multiple output formats:** Choose human‑readable text (default),
+  JSON (`--json`) or Markdown (`--markdown`).
+* **Remote lookups:** Use the `--remote` flag to query the PyPI JSON
+  API for funding links of packages that are not installed locally.
+* **Optional GitHub sponsor support:** When installed with the
+  `github` extra (`pip install pip‑fund[github]`), the tool can
+  attempt to fetch sponsor links from a repository’s
+  `.github/FUNDING.yml` file on GitHub if no funding metadata is
+  present.  This requires a GitHub access token.
 
-Python packaging metadata has a similar concept: the core metadata specification defines well‑known labels for Project‑URL entries. The funding label—together with aliases such as sponsor, donate and donation—is designated to hold a package's funding information [packaging.python.org](https://packaging.python.org). The PyPI JSON API exposes these URLs under a project_urls dictionary; for example, the sample sampleproject metadata includes a `"Funding": "https://donate.pypi.org"` entry [docs.pypi.org](https://docs.pypi.org).
+## Installation
 
-GitHub also offers a `.github/FUNDING.yml` file to display sponsor buttons with multiple funding platforms [docs.github.com](https://docs.github.com). However, there is no built‑in `pip fund` command equivalent to `npm fund` that aggregates funding links from installed packages.
+### Basic usage
 
-## What this script does
+```bash
+pip install pip-fund
 
-The `fund_py.py` script scans your Python environment (or specific packages) and reports any funding links it can find. It provides several enhancements over a minimal proof‑of‑concept:
+# Scan all installed packages for funding information
+pip-fund
 
-**Label normalisation and alias support**: Project‑URL labels are normalised (punctuation removed, whitespace stripped and lower‑cased) and compared against well‑known aliases like funding, sponsor, donate and donation [packaging.python.org](https://packaging.python.org). Labels containing the words "fund" or "sponsor" are also matched.
+# Check specific packages (installed or not) and query PyPI if needed
+pip-fund --remote requests flask
 
-**Grouping and multiple output formats**: Funding links are grouped by package. You can output human‑readable text (default), JSON (`--json`) or Markdown (`--markdown`).
-
-**Optional remote lookups**: With the `--remote` flag the script queries the PyPI JSON API to retrieve project_urls [docs.pypi.org](https://docs.pypi.org). This supplements local metadata and allows checking packages that aren't installed.
-
-**Flexible package selection**: If no package names are supplied, all installed distributions are scanned; otherwise only the specified packages are inspected.
-
-Running the script without arguments produces output like:
-
+# Output Markdown instead of plain text
+pip-fund --markdown
 ```
---- Funding Information Found ---
-Package: jupyter_server
-  Funding: https://numfocus.org/donate
-------------------------------
-Package: jsonschema
-  Funding: https://github.com/sponsors/Julian
-------------------------------
-...
+
+### Enabling GitHub sponsor integration
+
+To enable GitHub sponsor discovery, install the `github` extra and
+provide a GitHub personal access token via the `GITHUB_TOKEN` environment
+variable.  Without a token the GitHub API will operate with very
+limited rate limits.
+
+```bash
+pip install pip-fund[github]
+
+export GITHUB_TOKEN=ghp_yourtokenhere
+pip-fund --github flask
 ```
 
-You can also request machine‑readable output:
+## Usage
 
-- `python fund_py.py --json` outputs a JSON object mapping package names to an array of funding links
-- `python fund_py.py --markdown` prints a Markdown‑formatted report, listing each package and its funding URLs
-- `python fund_py.py --remote requests pandas` queries the PyPI API to find funding links for requests and pandas, even if they are not installed
+Running `pip-fund` without arguments scans all installed
+distributions in the current Python environment.  For each unique
+funding link found, it prints the label, the URL and the names of
+packages that declare it.  If no funding information is discovered,
+the tool explains why this might be the case.
 
-## Ideas for improvement
+Use the `--json` or `--markdown` flags to produce machine‑readable
+output.  Combine `--remote` with package names to query funding
+information for packages that aren’t installed.
 
-The current proof‑of‑concept works, but there are several opportunities to make it more robust and useful:
+## Project structure
 
-### 1. Normalize labels and support all well‑known aliases
+This project follows the modern Python packaging guidelines:
 
-The Python packaging specification recommends normalizing Project‑URL labels by removing punctuation and whitespace and comparing lower‑cased strings [packaging.python.org](https://packaging.python.org).
-
-Implementing the normalization function (as described in PEP 753) would allow labels like Funding, Donate or Sponsor this project to be treated the same. The specification also lists donate and donation as synonyms for funding; adding these to the match list will increase coverage.
-
-### 2. Filter duplicates and improve presentation
-
-At present every funding URL is printed separately, even if a package provides multiple funding‑related links. Group URLs per project and format the output more clearly (e.g. as a table or JSON), or support `--json` and `--markdown` flags.
-
-### 3. Search remote metadata
-
-Sometimes a library is not installed but still needs support. Add an option to query the PyPI JSON API for a given package name and extract `project_urls["Funding"]` [docs.pypi.org](https://docs.pypi.org).
-
-This could let users run `python fund.py requests` to see the funding information for requests even if it isn't installed.
-
-### 4. Surface GitHub Sponsor links
-
-For packages hosted on GitHub that don't include funding metadata, use the GitHub API to look for a `.github/FUNDING.yml` file [docs.github.com](https://docs.github.com) or parse repository metadata. This requires an access token but could uncover additional funding options.
-
-### 5. Integrate with pip
-
-To truly mirror `npm fund`, package this utility as a pip plugin (e.g. `pip‑fund`) that hooks into pip's command‑line interface and reuses its dependency graph.
-
-### 6. Configuration and caching
-
-Provide a configuration file to ignore certain packages or group funding links by organisation (e.g. all Jupyter packages link to numfocus.org). Caching results can avoid re‑scanning the environment on every invocation.
-
-### 7. Improve label matching
-
-Label matching is simple and may miss non‑standard labels until normalization and alias support is implemented.
+* A `pyproject.toml` file declares the build system (`setuptools`) and
+  metadata such as the project name, version and console script
+  entry point.  The `[project.scripts]` table instructs the build
+  backend to generate a `pip-fund` command that invokes the
+  `main()` function in `pip_fund/fund.py`【917575989859582†L503-L507】.
+* Source code lives in the `src/pip_fund/` package.  The main module
+  `fund.py` implements the logic of detecting funding links.
+* Optional dependencies for GitHub sponsor support are defined under
+  `[project.optional-dependencies]` in `pyproject.toml`.  Installing
+  with `pip install pip-fund[github]` adds the `PyGithub` and
+  `PyYAML` libraries.
 
 ## Contributing
 
-Contributions are welcome! You can improve the detection logic, add command‑line options, or expand the script to support other ecosystems. Please open issues or pull requests with suggestions.
+Contributions are welcome!  Feature requests, bug reports and pull
+requests are greatly appreciated.  Areas of interest include:
+
+* Improving detection of funding links in package metadata
+* Supporting additional donation platforms
+* Enhancing the GitHub sponsor integration
+* Adding interactive prompts or browser integration to open funding
+  pages directly from the CLI
 
 ## License
 
